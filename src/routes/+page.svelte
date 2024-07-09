@@ -18,6 +18,7 @@
 			</picture>
 		</span>
 	</h1>
+	
 	<Counter />
 </section>
 
