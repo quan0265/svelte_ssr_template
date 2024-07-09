@@ -1,7 +1,8 @@
 //import adapter from '@sveltejs/adapter-auto';
+import adapterCloudflare from '@sveltejs/adapter-cloudflare';
 import adapterVercel from '@sveltejs/adapter-vercel';
-import adapterCloudflare from '@sveltejs/adapter-vercel';
 
+//console.log(process.env.npm_lifecycle_event);
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
