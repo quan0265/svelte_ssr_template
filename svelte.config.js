@@ -1,5 +1,5 @@
-//import adapter from '@sveltejs/adapter-auto';
-import adapterCloudflare from '@sveltejs/adapter-cloudflare';
+import adapter from '@sveltejs/adapter-auto';
+// import adapterCloudflare from '@sveltejs/adapter-cloudflare';
 //import adapterVercel from '@sveltejs/adapter-vercel';
 
 //console.log(process.env.npm_lifecycle_event);
@@ -12,7 +12,8 @@ const config = {
 		// See https://kit.svelte.dev/docs/adapters for more information about adapters.
 		//adapter: adapter()
 		//adapter: process.env.npm_lifecycle_event === 'build:c' ? adapterCloudflare() : adapterVercel()
-		adapter: adapterCloudflare()
+		// adapter: adapterCloudflare(),
+		adapter: adapter()
 	}
 };
 
