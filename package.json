@@ -4,11 +4,12 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "vite dev",
+		"dev": "vite dev & start chrome http://localhost:8200",
 		"build": "vite build && php build.php",
-		"preview": "vite preview",
+		"preview": "vite preview & start http://localhost:4173",
 		"prepare": "svelte-kit sync || echo ''",
-		"view-php": "cd .svelte-kit/output/client && php -S localhost:8000"
+		"view-php": "cd .svelte-kit/output/client && php -S localhost:8000",
+		"view-prerender": "cd .svelte-kit/output/prerendered && php -S localhost:8500 & start http://localhost:8500"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^6.0.0",

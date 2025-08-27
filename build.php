@@ -1,10 +1,52 @@
 <?php 
 
-// Build for spa
+function curlGet($url) {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    $response = curl_exec($ch);
+    curl_close($ch);
+    return $response;
+}
+
+function copyFolder($source, $destination) {
+    if (is_dir($source)) {
+        @mkdir($destination);
+        $directory = dir($source);
+        while (false !== ($entry = $directory->read())) {
+            if ($entry == '.' || $entry == '..') {
+                continue;
+            }
+            copyFolder("$source/$entry", "$destination/$entry");
+        }
+        $directory->close();
+    } elseif (file_exists($source)) {
+        copy($source, $destination);
+    }
+}
+
 
 $base_path = '/sales';
 $base_path = '';
 
+// ===== build for prerender =====
+function init_build_for_prerender() {
+
+    copyFolder('.svelte-kit/output/client/.vite/', '.svelte-kit/output/prerendered/.vite');
+    copyFolder('.svelte-kit/output/client/_app/', '.svelte-kit/output/prerendered/_app');
+    copyFolder('static', './.svelte-kit/output/prerendered');
+
+    // $content = '';
+    // file_put_contents('./.svelte-kit/output/prerendered/index.php', $content);
+    copyFolder('backend', './.svelte-kit/output/prerendered');
+
+}
+
+init_build_for_prerender();
+// ===== build for prerender =====
+
+
+// ===== build for spa =====
 function get_html_svelte_spa($base_path) {
     $files = scandir("./.svelte-kit/output/client/_app/immutable/entry/");
     $name_start_js = '';
@@ -113,6 +155,7 @@ include "index" . $index . ".php";
 
 file_put_contents('./.svelte-kit/output/client/index.php', $content);
 
+// ===== build for spa =====
 
 
 ?>
