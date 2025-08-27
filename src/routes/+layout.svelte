@@ -1,9 +1,12 @@
 <script>
+	import Progress from '$lib/components/Progress.svelte';
 	import '$lib/css/style.scss'
 	import '../app.css'
 	
 	import Header from './Header.svelte';
 </script>
+
+<Progress />
 
 <div class="app">
 	<Header />
