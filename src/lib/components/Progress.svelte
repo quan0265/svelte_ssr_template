@@ -46,38 +46,3 @@
         <div class="bar" style="width: 0%"></div>
     </div>
 {/if}
-
-<style>
-    /* container fixed top, pointer-events none để không can thiệp click */
-    .progress-root {
-        position: fixed;
-        top: 0;
-        left: 0;
-        height: 2px;
-        width: 100%;
-        z-index: 9999;
-        pointer-events: none;
-    }
-
-    .bar {
-        height: 100%;
-        width: 0%;
-        transition:
-            width 250ms linear,
-            opacity 300ms linear;
-        transform-origin: left center;
-        /* bạn có thể đổi màu hoặc dùng gradient */
-        background: linear-gradient(90deg, #008f99, #008f99);
-        box-shadow: 0 0 8px rgba(0 143 153, 0.6);
-    }
-
-    /* ẩn khi không visible (opacity để transition mượt) */
-    .hidden {
-        opacity: 0;
-        pointer-events: none;
-    }
-
-    .visible {
-        opacity: 1;
-    }
-</style>
