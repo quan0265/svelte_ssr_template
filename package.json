@@ -4,7 +4,7 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "vite dev & start chrome http://localhost:8200",
+		"dev": "vite dev --port 8200",
 		"build": "vite build && php build.php",
 		"preview": "vite preview & start http://localhost:4173",
 		"prepare": "svelte-kit sync || echo ''",
