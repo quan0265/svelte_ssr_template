@@ -1,12 +1,16 @@
 <?php 
 
 /**	
+	version 1.5.6
 	- Author: quan0265
 	- DB pdo full:
 		- version 1.2: select, table, join, group by, having, order by, limit
 		- version 1.3: whereIn, whereNotIn
 		- version 1.4: insertRaw, updateRaw, upsert
-		- version 1.5: whereNull, whereNotNull
+		- version 1.5.1: whereNull, whereNotNull
+		- version 1.5.2: fetchCount, orderByRaw
+		- version 1.5.3 paginate
+		- version 1.5.6 transaction
 */
 
 // config
@@ -35,6 +39,7 @@ class DB {
 	protected static $having = NULL;
 	protected static $order = NULL;
 	protected static $limit = NULL;
+	protected static $offset = NULL;
 
 	protected static $data_execute = [];
 	protected static $comparison_operator_array = ['=', '>', '<', '>=', '<=', '<>', '!=', 'like', 'LIKE', 'not like', 'NOT LIKE'];
@@ -105,6 +110,7 @@ class DB {
 		static::$having = NULL;
 		static::$order = NULL;
 		static::$limit = NULL;
+		static::$offset = NULL;
 	}
 
 	public static function getSql() {
@@ -127,13 +133,27 @@ class DB {
 
 	public static function error($text="") {
 		if ($text) {
-			trigger_error($text, E_USER_WARNING);
+			trigger_error($text, E_USER_ERROR);
 		}
 		$error = mysqli_error(static::$conn);
 		if ($error) {
-			// trigger_error(static::$sql."<br>", E_USER_WARNING);
-			trigger_error($error, E_USER_WARNING);
+			// trigger_error(static::$sql."<br>", E_USER_ERROR);
+			trigger_error($error, E_USER_ERROR);
 		}
+	}
+
+	public static function isValidMysqlColumnName(string $name): bool {
+		// Chỉ chấp nhận a-z, A-Z, 0-9, _ 
+		// Không cho phép bắt đầu bằng số
+		return preg_match('/^[A-Za-z_][A-Za-z0-9_]*$/', $name) === 1;
+	}
+
+	public static function checkColumnNameIsValid($name) {
+		if (static::isValidMysqlColumnName($name)) {
+			return true;
+		}
+		static::error("Error syntax method checkColumnNameIsValid argument name must is valid mysql column name: $name");
+		return false;
 	}
 
 	public static function table($table) {
@@ -153,7 +173,7 @@ class DB {
 		$field = "";
 		$value = "";
 		foreach($data as $k=> $v){
-			$field.= ", $k";
+			$field.= ", `$k`";
 			$value.= ", :$k";
 		}
 		$field = ltrim($field, ", ");
@@ -243,6 +263,8 @@ class DB {
 	}
 
 	public static function increment($col, $count=1){
+		static::checkColumnNameIsValid($col);
+
     	static::connect();
     	if (static::$where == '') {
     		exit('Error syntax method increment, please add method where before increment');
@@ -281,6 +303,9 @@ class DB {
 	}
 
 	public static function join($table, $col1, $operator, $col2) {
+		static::checkColumnNameIsValid($col1);
+		static::checkColumnNameIsValid($col2);
+
 		$operator = trim($operator);
 		if (in_array($operator, static::$comparison_operator_array)) {
 			static::$join .= "JOIN $table ON $col1 $operator $col2";
@@ -294,6 +319,9 @@ class DB {
 	}
 
 	public static function leftJoin($table, $col1, $operator, $col2) {
+		static::checkColumnNameIsValid($col1);
+		static::checkColumnNameIsValid($col2);
+
 		$operator = trim($operator);
 		if (in_array($operator, static::$comparison_operator_array)) {
 			static::$join .= "LEFT JOIN $table ON $col1 $operator $col2";
@@ -307,6 +335,9 @@ class DB {
 	}
 
 	public static function rightJoin($table, $col1, $operator, $col2) {
+		static::checkColumnNameIsValid($col1);
+		static::checkColumnNameIsValid($col2);
+
 		$operator = trim($operator);
 		if (in_array($operator, static::$comparison_operator_array)) {
 			static::$join .= "RIGHT JOIN $table ON $col1 $operator $col2";
@@ -319,7 +350,9 @@ class DB {
 		return new static();
 	}
 
-	public static function where($filed, $comparison_operator, $value=false) {
+	public static function where($field, $comparison_operator, $value=false) {
+		static::checkColumnNameIsValid($field);
+
 		if ($value === false) {
 			$value = $comparison_operator;
 			$comparison_operator = '=';
@@ -332,7 +365,7 @@ class DB {
 			else {
 				static::$where .= " AND";
 			}
-			static::$where .= " $filed $comparison_operator ?";
+			static::$where .= " $field $comparison_operator ?";
 			static::$data_execute[] = $value;
 		}
 		else {
@@ -343,7 +376,9 @@ class DB {
 		return new static();
 	}
 
-	public static function orWhere($filed, $comparison_operator, $value=false) {
+	public static function orWhere($field, $comparison_operator, $value=false) {
+		static::checkColumnNameIsValid($field);
+
 		if ($value === false) {
 			$value = $comparison_operator;
 			$comparison_operator = '=';
@@ -356,7 +391,7 @@ class DB {
 			else {
 				static::$where .= " OR";
 			}
-			static::$where .= " $filed $comparison_operator ?";
+			static::$where .= " $field $comparison_operator ?";
 			static::$data_execute[] = $value;
 		}
 		else {
@@ -367,7 +402,24 @@ class DB {
 		return new static();
 	}
 
-	public static function whereIn($filed, $arr=[]) {
+	public static function whereIn($field, $arr=[]) {
+		static::checkColumnNameIsValid($field);
+
+		if (is_string($arr)) {
+			$array_strings = explode(',', $arr);
+			$arr = [];
+			foreach ($array_strings as $k => $v) {
+				if (!empty(trim($v))) {
+					$arr[] = trim($v);
+				}
+			}
+		}
+		if (empty($arr)) return new static();
+		if (count($arr) == 1) {
+			$instance = new static();
+			return $instance->where($field, $arr[0]);
+		}
+
 		$in = '(' . implode(', ', $arr) . ')';
 		$in = '';
 		foreach ($arr as $value) {
@@ -386,14 +438,30 @@ class DB {
 		else {
 			static::$where .= " AND";
 		}
-		static::$where .= " $filed IN $in";
+		static::$where .= " $field IN $in";
 		return new static();
 	}
 
-	public static function whereNotIn($filed, $arr=[]) {
+	public static function whereNotIn($field, $arr=[]) {
+		static::checkColumnNameIsValid($field);
+
+		if (is_string($arr)) {
+			$array_strings = explode(',', $arr);
+			$arr = [];
+			foreach ($array_strings as $k => $v) {
+				if (!empty(trim($v))) {
+					$arr[] = trim($v);
+				}
+			}
+		}
 		if (empty($arr)) {
 			return new static();
 		}
+		if (count($arr) == 1) {
+			$instance = new static();
+			return $instance->where($field, '<>', $arr[0]);
+		}
+
 		$in = '(' . implode(', ', $arr) . ')';
 		$in = '';
 		foreach ($arr as $value) {
@@ -412,7 +480,7 @@ class DB {
 		else {
 			static::$where .= " AND";
 		}
-		static::$where .= " $filed NOT IN $in";
+		static::$where .= " $field NOT IN $in";
 		return new static();
 	}
 
@@ -441,39 +509,47 @@ class DB {
 		return new static();
 	}
 
-	public static function groupBy($filed) {
+	public static function groupBy($field) {
+		static::checkColumnNameIsValid($field);
+
 		if (static::$group_by === NULL) {
-			static::$group_by = "GROUP BY $filed";
+			static::$group_by = "GROUP BY $field";
 		}
 		else {
-			static::$group_by .= ", $filed";
+			static::$group_by .= ", $field";
 		}
 		return new static();
 	}
 
-	public static function whereNull($filed) {
+	public static function whereNull($field) {
+		static::checkColumnNameIsValid($field);
+
 		if (static::$where === NUll) {
 			static::$where = "WHERE";
 		}
 		else {
 			static::$where .= " AND";
 		}
-		static::$where .= " $filed IS NULL";
+		static::$where .= " $field IS NULL";
 		return new static();
 	}
 
-	public static function whereNotNull($filed) {
+	public static function whereNotNull($field) {
+		static::checkColumnNameIsValid($field);
+		
 		if (static::$where === NUll) {
 			static::$where = "WHERE";
 		}
 		else {
 			static::$where .= " AND";
 		}
-		static::$where .= " $filed IS NOT NULL";
+		static::$where .= " $field IS NOT NULL";
 		return new static();
 	}
 
-	public static function having($filed, $operator, $value=false) {
+	public static function having($field, $operator, $value=false) {
+		// checkColumnNameIsValid($field);
+
 		if ($value === false) {
 			$value = $operator;
 			$operator = '=';
@@ -485,7 +561,7 @@ class DB {
 			else {
 				static::$having .= " AND";
 			}
-			static::$having .= " $filed $operator ?";
+			static::$having .= " $field $operator ?";
 			static::$data_execute[] = $value;
 		}
 		else {
@@ -495,7 +571,9 @@ class DB {
 		return new static();
 	}
 
-	public static function orHaving($filed, $operator, $value=false) {
+	public static function orHaving($field, $operator, $value=false) {
+		// checkColumnNameIsValid($field);
+
 		if ($value === false) {
 			$value = $operator;
 			$operator = '=';
@@ -507,7 +585,7 @@ class DB {
 			else {
 				static::$having .= " OR";
 			}
-			static::$having .= " $filed $operator ?";
+			static::$having .= " $field $operator ?";
 			static::$data_execute[] = $value;
 		}
 		else {
@@ -517,14 +595,16 @@ class DB {
 		return new static();
 	}
 
-	public static function orderBy($filed, $direction='') {
+	public static function orderBy($field, $direction='') {
+		static::checkColumnNameIsValid($field);
+
 		$direction = strtoupper($direction);
 		if ($direction == 'ASC' || $direction == 'DESC') {
 			if (static::$order === NULL) {
-				static::$order = "ORDER BY $filed $direction";
+				static::$order = "ORDER BY $field $direction";
 			}
 			else {
-				static::$order .= ", $filed $direction";
+				static::$order .= ", $field $direction";
 			}
 		}
 		else {
@@ -540,20 +620,28 @@ class DB {
 		return new static();
 	}
 
-	public static function limit(?int $offset, ?int$limit=0) {
-		if ($limit == 0) {
-			$limit = $offset;
-			static::$limit = "LIMIT $limit";
+	public static function orderByRaw($sql) {
+		if (static::$order === NULL) {
+			static::$order = "ORDER BY $sql";
+		} else {
+			static::$order .= ", $sql";
 		}
-		else {
-			static::$limit = "LIMIT $offset, $limit";
-		}
+		return new static();
+	}
+
+	public static function limit(?int $limit=0) {
+		static::$limit = "LIMIT $limit";
+		return new static();
+	}
+
+	public static function offset(?int $offset) {
+		static::$offset = "OFFSET $offset";
 		return new static();
 	}
 
 	public static function get($type = 'object') {
 		static::connect();
-		static::$sql = "SELECT " . static::$select . " FROM " . static::$table . ' ' . static::$join . ' ' . static::$where . ' ' . static::$group_by . ' ' . static::$having . ' ' . static::$order . ' ' . static::$limit;
+		static::$sql = "SELECT " . static::$select . " FROM " . static::$table . ' ' . static::$join . ' ' . static::$where . ' ' . static::$group_by . ' ' . static::$having . ' ' . static::$order . ' ' . static::$limit . ' ' . static::$offset;
 		$stmt= static::$conn->prepare(static::$sql);
 		$stmt->execute(static::$data_execute);
 		if ($type == 'object') {
@@ -568,7 +656,7 @@ class DB {
 
 	public static function first($type = 'object'){
 		static::connect();
-		static::$sql = "SELECT " . static::$select . " FROM " . static::$table . ' ' . static::$join . ' ' . static::$where . ' ' . static::$group_by . ' ' . static::$having . ' ' . static::$order . ' ' . static::$limit;
+		static::$sql = "SELECT " . static::$select . " FROM " . static::$table . ' ' . static::$join . ' ' . static::$where . ' ' . static::$group_by . ' ' . static::$having . ' ' . static::$order . ' ' . static::$limit . ' ' . static::$offset;
 		$stmt= static::$conn->prepare(static::$sql);
 		$stmt->execute(static::$data_execute);
 		if ($type == 'object') {
@@ -581,9 +669,13 @@ class DB {
 		return static::$result;
 	}
 
-	public static function count($filed='id'){
+	public static function count($field='id'){
+		if ($field != '*') {
+			static::checkColumnNameIsValid($field);
+		}
+
 		static::connect();
-		static::$sql = "SELECT COUNT($filed) as total FROM " . static::$table . ' ' . static::$join . ' ' . static::$where . ' ' . static::$group_by . ' ' . static::$having . ' ' . static::$order . ' ' . static::$limit;
+		static::$sql = "SELECT COUNT($field) as total FROM " . static::$table . ' ' . static::$join . ' ' . static::$where . ' ' . static::$group_by . ' ' . static::$having . ' ' . static::$order . ' ' . static::$limit . ' ' . static::$offset;
 		$stmt= static::$conn->prepare(static::$sql);
 		$stmt->execute(static::$data_execute);
 		$result = $stmt->fetch(PDO::FETCH_OBJ);
@@ -592,9 +684,11 @@ class DB {
 		return static::$result;
 	}
 
-	public static function max($filed='id'){
+	public static function max($field='id'){
+		static::checkColumnNameIsValid($field);
+
 		static::connect();
-		static::$sql = "SELECT MAX($filed) as max FROM " . static::$table . ' ' . static::$join . ' ' . static::$where . ' ' . static::$group_by . ' ' . static::$having . ' ' . static::$order . ' ' . static::$limit;
+		static::$sql = "SELECT MAX($field) as max FROM " . static::$table . ' ' . static::$join . ' ' . static::$where . ' ' . static::$group_by . ' ' . static::$having . ' ' . static::$order . ' ' . static::$limit . ' ' . static::$offset;
 		$stmt= static::$conn->prepare(static::$sql);
 		$stmt->execute(static::$data_execute);
 		$result = $stmt->fetch(PDO::FETCH_OBJ);
@@ -603,9 +697,11 @@ class DB {
 		return static::$result;
 	}
 
-	public static function sum($filed='id'){
+	public static function sum($field='id'){
+		static::checkColumnNameIsValid($field);
+
 		static::connect();
-		static::$sql = "SELECT SUM($filed) as total FROM " . static::$table . ' ' . static::$join . ' ' . static::$where . ' ' . static::$group_by . ' ' . static::$having . ' ' . static::$order . ' ' . static::$limit;
+		static::$sql = "SELECT SUM($field) as total FROM " . static::$table . ' ' . static::$join . ' ' . static::$where . ' ' . static::$group_by . ' ' . static::$having . ' ' . static::$order . ' ' . static::$limit . ' ' . static::$offset;
 		$stmt= static::$conn->prepare(static::$sql);
 		$stmt->execute(static::$data_execute);
 		$result = $stmt->fetch(PDO::FETCH_OBJ);
@@ -727,6 +823,76 @@ class DB {
 		static::$sql = $sql;
 		static::$data_execute = $data;
 		return static::execute();
+	}
+
+	public function paginate(int $page_size = 20, int $page = 1, $type='object'){
+		static::connect();
+		$sql_count = "SELECT count(*) as total FROM " . static::$table . ' ' . static::$join . ' ' . static::$where . ' ' . static::$group_by . ' ' . static::$having . ' LIMIT 1';
+
+		$stmt = static::$conn->prepare($sql_count);
+		$stmt->execute(static::$data_execute);
+		static::$result = $stmt->fetch(PDO::FETCH_OBJ);
+		$total = static::$result->total;
+
+		static::limit($page_size);
+		static::offset(($page - 1) * $page_size);
+		
+		static::$sql = "SELECT " . static::$select . " FROM " . static::$table . ' ' . static::$join . ' ' . static::$where . ' ' . static::$group_by . ' ' . static::$having . ' ' . static::$order . ' ' . static::$limit . ' ' . static::$offset;
+
+		$stmt = static::$conn->prepare(static::$sql);
+		$stmt->execute(static::$data_execute);
+		static::$result = $stmt->fetchAll(PDO::FETCH_OBJ);
+		$result = !empty(static::$result) ? static::$result : [];
+		$paginate = [
+			"data" => $result,
+			"current_page" => $page,
+			"row_per_page" => $page_size,
+		];
+
+		static::flushData();
+
+		$paginate["total"] = $total;
+		$paginate["total_page"] = ceil($total / $page_size);
+		return $paginate;
+	}
+
+	// Transaction
+	public static function beginTransaction() {
+		static::connect();
+		return static::$conn->beginTransaction();
+	}
+	
+	public static function commit() {
+		static::connect();
+		return static::$conn->commit();
+	}
+	
+	public static function rollBack() {
+		static::connect();
+		return static::$conn->rollBack();
+	}
+
+	public static function transaction(callable $callback) {
+		static::connect();
+	
+		try {
+	
+			static::$conn->beginTransaction();
+	
+			$result = $callback();
+	
+			static::$conn->commit();
+	
+			return $result;
+	
+		} catch (Throwable $e) {
+	
+			if (static::$conn->inTransaction()) {
+				static::$conn->rollBack();
+			}
+	
+			throw $e;
+		}
 	}
 
 }

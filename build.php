@@ -40,6 +40,16 @@ function init_build_for_prerender() {
     // file_put_contents('./.svelte-kit/output/prerendered/index.php', $content);
     copyFolder('backend', './.svelte-kit/output/prerendered');
 
+    // create route / 2, 3
+    $html = file_get_contents('./.svelte-kit/output/prerendered/pages/index.html');
+    $html2 = str_replace('new URL("."', 'new URL(".."', $html);
+    $html2 = str_replace('"./_app/', '"../_app/', $html2);
+    file_put_contents('./.svelte-kit/output/prerendered/pages/index2.html', $html2);
+
+    $html3 = str_replace('new URL("."', 'new URL("../.."', $html);
+    $html3 = str_replace('"./_app/', '"../../_app/', $html3);
+    file_put_contents('./.svelte-kit/output/prerendered/pages/index3.html', $html3);
+
 }
 
 init_build_for_prerender();

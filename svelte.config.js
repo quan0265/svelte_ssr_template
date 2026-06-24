@@ -13,7 +13,12 @@ const config = {
 		//adapter: adapter()
 		//adapter: process.env.npm_lifecycle_event === 'build:c' ? adapterCloudflare() : adapterVercel()
 		// adapter: adapterCloudflare(),
-		adapter: adapter()
+		adapter: adapter(),
+		paths: {
+			assets: "",
+			base: "", // <a href="{base}/your-page">Link</a>
+			//relative: true,
+		},
 	}
 };
 
